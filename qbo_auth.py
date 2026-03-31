@@ -1,14 +1,12 @@
 """
 QBO OAuth 2.0 authentication handler.
 
-First run: opens browser for you to authorize, saves tokens to .env.
+First run: gives you a URL to visit, you paste back the redirect URL.
 Subsequent runs: uses refresh token (auto-refreshes if expired).
 """
 
 import os
 import sys
-import webbrowser
-from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 from dotenv import load_dotenv, set_key
@@ -46,30 +44,6 @@ def get_tokens():
     return auth_client
 
 
-class CallbackHandler(BaseHTTPRequestHandler):
-    """Handles the OAuth callback from Intuit."""
-
-    auth_code = None
-    realm_id = None
-
-    def do_GET(self):
-        query = parse_qs(urlparse(self.path).query)
-        CallbackHandler.auth_code = query.get("code", [None])[0]
-        CallbackHandler.realm_id = query.get("realmId", [None])[0]
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.end_headers()
-        self.wfile.write(
-            b"<html><body><h2>Authorization successful!</h2>"
-            b"<p>You can close this tab and return to the terminal.</p>"
-            b"</body></html>"
-        )
-
-    def log_message(self, format, *args):
-        pass  # Suppress server logs
-
-
 def initial_auth():
     """Run the full OAuth flow (first time setup)."""
     client_id = os.getenv("QBO_CLIENT_ID")
@@ -84,30 +58,42 @@ def initial_auth():
     auth_client = get_auth_client()
     auth_url = auth_client.get_authorization_url([Scopes.ACCOUNTING])
 
-    print(f"\nOpening browser for authorization...")
-    print(f"If it doesn't open, go to:\n{auth_url}\n")
-    webbrowser.open(auth_url)
+    print(f"\n=== QBO Authorization ===\n")
+    print(f"1. Open this URL in any browser:\n")
+    print(f"   {auth_url}\n")
+    print(f"2. Log into QuickBooks and authorize the app.")
+    print(f"3. You'll be redirected to a URL that probably won't load (that's fine).")
+    print(f"4. Copy the FULL URL from your browser's address bar and paste it here.\n")
 
-    # Start local server to catch the callback
-    server = HTTPServer(("localhost", 8080), CallbackHandler)
-    print("Waiting for authorization callback...")
-    server.handle_request()
+    redirect_url = input("Paste the redirect URL here: ").strip()
 
-    if not CallbackHandler.auth_code:
-        print("ERROR: No authorization code received.")
+    # Parse the auth code and realm ID from the redirect URL
+    parsed = urlparse(redirect_url)
+    query = parse_qs(parsed.query)
+
+    auth_code = query.get("code", [None])[0]
+    realm_id = query.get("realmId", [None])[0]
+
+    if not auth_code:
+        print("ERROR: Could not find authorization code in that URL.")
+        print("  Make sure you copied the full URL from the address bar.")
+        sys.exit(1)
+
+    if not realm_id:
+        print("ERROR: Could not find realmId in that URL.")
         sys.exit(1)
 
     # Exchange code for tokens
-    auth_client.get_bearer_token(CallbackHandler.auth_code, realm_id=CallbackHandler.realm_id)
+    auth_client.get_bearer_token(auth_code, realm_id=realm_id)
 
     # Save to .env
-    set_key(ENV_PATH, "QBO_REALM_ID", CallbackHandler.realm_id)
+    set_key(ENV_PATH, "QBO_REALM_ID", realm_id)
     set_key(ENV_PATH, "QBO_REFRESH_TOKEN", auth_client.refresh_token)
 
     print(f"\nAuthorization successful!")
-    print(f"  Company ID (Realm): {CallbackHandler.realm_id}")
+    print(f"  Company ID (Realm): {realm_id}")
     print(f"  Tokens saved to .env")
-    print(f"\nYou're ready to use mark_paid.py")
+    print(f"\nYou're all set. The MCP server is ready to use.")
 
 
 if __name__ == "__main__":

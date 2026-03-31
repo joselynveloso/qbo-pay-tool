@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authorization Callback</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 80px auto; padding: 0 20px; color: #333; }
+        h1 { font-size: 1.4em; }
+        .code-box { background: #f4f4f4; border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin: 16px 0; word-break: break-all; font-family: monospace; font-size: 0.9em; cursor: pointer; }
+        .code-box:hover { background: #eef; }
+        .label { font-weight: bold; margin-top: 20px; }
+        .success { color: #2e7d32; }
+        .error { color: #c62828; }
+        .hint { color: #666; font-size: 0.85em; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Authorization Callback</h1>
+    <div id="content"></div>
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const realmId = params.get('realmId');
+        const error = params.get('error');
+        const el = document.getElementById('content');
+
+        if (error) {
+            el.innerHTML = `<p class="error">Authorization failed: ${error}</p>`;
+        } else if (code && realmId) {
+            el.innerHTML = `
+                <p class="success">Authorization successful!</p>
+                <p>Copy the full URL from your browser's address bar and paste it into the terminal.</p>
+                <p class="label">Or copy these values individually:</p>
+                <p class="label">Auth Code:</p>
+                <div class="code-box" onclick="navigator.clipboard.writeText('${code}')">${code}</div>
+                <p class="hint">Click to copy</p>
+                <p class="label">Company ID (Realm):</p>
+                <div class="code-box" onclick="navigator.clipboard.writeText('${realmId}')">${realmId}</div>
+                <p class="hint">Click to copy</p>
+            `;
+        } else {
+            el.innerHTML = '<p class="error">Missing authorization parameters. Please try the auth flow again.</p>';
+        }
+    </script>
+</body>
+</html>
